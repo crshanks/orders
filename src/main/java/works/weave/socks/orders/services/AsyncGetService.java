@@ -1,5 +1,10 @@
 package works.weave.socks.orders.services;
 
+// Java agent API imports 
+import com.newrelic.api.agent.NewRelic;
+import com.newrelic.api.agent.Trace;
+import com.newrelic.api.agent.Token;
+
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -88,6 +93,20 @@ public class AsyncGetService {
         LOG.debug("Requesting: " + request.toString());
         T responseBody = restProxyTemplate.getRestTemplate().exchange(request, returnType).getBody();
         LOG.debug("Received: " + responseBody);
+        return new AsyncResult<>(responseBody);
+    }
+
+    // instrumentation via annotation
+    @Async
+    @Trace(async = true)
+    public <T, B> Future<T> postResource(URI uri, B body, ParameterizedTypeReference<T> returnType, Token token) {
+        token.link();
+        RequestEntity<B> request = RequestEntity.post(uri).contentType(MediaType.APPLICATION_JSON).accept(MediaType
+                .APPLICATION_JSON).body(body);
+        LOG.debug("Requesting: " + request.toString());
+        T responseBody = restProxyTemplate.getRestTemplate().exchange(request, returnType).getBody();
+        LOG.debug("Received: " + responseBody);
+        token.expire();
         return new AsyncResult<>(responseBody);
     }
 }

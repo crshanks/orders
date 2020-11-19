@@ -1,5 +1,10 @@
 package works.weave.socks.orders.controllers;
 
+// Java agent API imports
+import com.newrelic.api.agent.NewRelic;
+import com.newrelic.api.agent.Token;
+import com.newrelic.api.agent.Trace;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +55,7 @@ public class OrdersController {
     @RequestMapping(path = "/orders", consumes = MediaType.APPLICATION_JSON_VALUE, method = RequestMethod.POST)
     public
     @ResponseBody
+    @Trace(dispatcher = true)
     CustomerOrder newOrder(@RequestBody NewOrderResource item) {
         try {
 
@@ -96,11 +102,22 @@ public class OrdersController {
                 throw new PaymentDeclinedException(paymentResponse.getMessage());
             }
 
+            final Token token = NewRelic.getAgent().getTransaction().getToken();
+            LOG.info("Token: " + token.toString());
+
             // Ship
             String customerId = parseId(customerFuture.get(timeout, TimeUnit.SECONDS).getId().getHref());
-            Future<Shipment> shipmentFuture = asyncGetService.postResource(config.getShippingUri(), new Shipment
-                    (customerId), new ParameterizedTypeReference<Shipment>() {
-            });
+            Future<Shipment> shipmentFuture;
+            try {
+                shipmentFuture = asyncGetService.postResource(
+                    config.getShippingUri(), 
+                    new Shipment(customerId), 
+                    new ParameterizedTypeReference<Shipment>() {},
+                    token
+                );
+            } finally {
+                // token.expire();
+            }
 
             CustomerOrder order = new CustomerOrder(
                     null,
